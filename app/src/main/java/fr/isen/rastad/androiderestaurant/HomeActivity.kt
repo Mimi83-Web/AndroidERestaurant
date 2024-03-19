@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -349,6 +351,23 @@ suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentAct
 
 }
 
+suspend fun readCartFile(activity: ComponentActivity): List<Pair<Dish, Int>> {
+    val filename = "cart.json"
+    val file = File(activity.filesDir, filename)
+    if (!file.exists()) return emptyList()
+
+    return file.readLines().mapNotNull { line ->
+        try {
+            val jsonObject = JSONObject(line)
+            val dish = Gson().fromJson(jsonObject.toString(), Dish::class.java)
+            val quantity = jsonObject.getInt("quantity")
+            Pair(dish, quantity)
+        } catch (e: Exception) {
+            null
+        }
+    }
+}
+
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class, ExperimentalLayoutApi::class)
@@ -363,7 +382,9 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
     Scaffold(
         topBar = {
             MyTopAppBar(activity, cartQuantity)
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
             if (dish.images.isNotEmpty()) {
@@ -426,7 +447,7 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
                     coroutineScope.launch {
                         saveDishToCartFile(dish, quantity, activity)
                         cartQuantity.value += quantity // Mise à jour de l'état partagé
-                        val result = snackbarHostState.showSnackbar(
+                        snackbarHostState.showSnackbar(
                             message = "Plat ajouté au panier",
                             actionLabel = "OK"
                         )
@@ -501,19 +522,87 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
 }
 
 
+@SuppressLint("UnrememberedMutableState")
 class CartActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             AndroidERestaurantTheme {
+                val cartItems = remember { mutableStateOf(listOf<Pair<Dish, Int>>()) }
+                val coroutineScope = rememberCoroutineScope()
 
+                LaunchedEffect(true) {
+                    coroutineScope.launch {
+                        cartItems.value = readCartFile(this@CartActivity)
+                    }
+                }
+
+                CartScreen(
+                    cartItems = cartItems.value,
+                    onRemoveItem = { dishToRemove ->
+                        coroutineScope.launch {
+                            removeFromCartFile(dishToRemove, this@CartActivity)
+                            cartItems.value = readCartFile(this@CartActivity)
+                        }
+                    },
+                    onPlaceOrder = {
+                        Log.d("CartActivity", "La commande a été passée.")
+                        // Ici, implémentez la logique de passation de commande, comme l'envoi d'une requête au serveur.
+                    }
+                )
             }
         }
     }
 }
 
+
 fun getCartQuantity(context: Context): Int {
     val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
     return sharedPreferences.getInt("cart_quantity", 0)
 }
+@Composable
+fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, onPlaceOrder: () -> Unit) {
+    Column {
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(cartItems) { (dish, quantity) ->
+                Card(
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text("${dish.name_fr} x$quantity", style = MaterialTheme.typography.titleLarge)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { onRemoveItem(dish) }) {
+                            Text("Supprimer")
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onPlaceOrder() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text("Passer la commande")
+        }
+    }
+}
 
+
+suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity) {
+    val cartItems = readCartFile(activity).toMutableList()
+    val itemIndex = cartItems.indexOfFirst { it.first.name_fr == dishToRemove.name_fr }
+    if (itemIndex != -1) {
+        cartItems.removeAt(itemIndex)
+        val filename = "cart.json"
+        val file = File(activity.filesDir, filename)
+        file.writeText("") // Clear the file
+        cartItems.forEach { (dish, quantity) ->
+            saveDishToCartFile(dish, quantity, activity)
+        }
+    }
+}
