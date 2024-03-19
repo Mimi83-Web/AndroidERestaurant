@@ -1,5 +1,6 @@
 package fr.isen.rastad.androiderestaurant
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
@@ -41,7 +42,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,8 +91,7 @@ class HomeActivity : ComponentActivity() {
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun MyTopAppBar(activity: ComponentActivity) {
-    val cartQuantity = remember { mutableStateOf(getCartQuantity(activity)) }
+fun MyTopAppBar(activity: ComponentActivity, cartQuantity: MutableState<Int>) {
     TopAppBar(
         title = { Text("DroidRestaurant") },
         actions = {
@@ -107,12 +109,21 @@ fun MyTopAppBar(activity: ComponentActivity) {
         }
     )
 }
+
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun Greeting(activity: ComponentActivity) {
     Scaffold(
         topBar = {
-                MyTopAppBar(activity)
+            TopAppBar(
+                title = { Text("DroidRestaurant") },
+                navigationIcon = {
+                    IconButton(onClick = { activity.onBackPressed() }) {
+                        Icon(Icons.Filled.ArrowBack, "Back")
+                    }
+                }
+            )
         }
     ) { innerPadding ->
         Column(
@@ -297,6 +308,7 @@ fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit,
 }
 
 class DishDetailActivity : ComponentActivity() {
+    @SuppressLint("UnrememberedMutableState")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val dishJson = intent.getStringExtra("dish_details")
@@ -304,7 +316,7 @@ class DishDetailActivity : ComponentActivity() {
 
         setContent {
             AndroidERestaurantTheme {
-                DishDetailScreen(dish = dish, onBack = { finish() }, activity = this)
+                DishDetailScreen(dish = dish, onBack = { finish() }, activity = this, cartQuantity = mutableIntStateOf(getCartQuantity(this)))
             }
         }
     }
@@ -340,7 +352,7 @@ suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentAct
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class, ExperimentalLayoutApi::class)
-fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivity) {
+fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivity, cartQuantity: MutableState<Int>) {
     val pagerState = rememberPagerState()
     var quantity by remember { mutableStateOf(1) } // Correction ici
     val pricePerDish = dish.prices.first().price.toFloat() // Supposons que prices.first().price contienne le prix unitaire sous forme de chaîne
@@ -350,7 +362,7 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
 
     Scaffold(
         topBar = {
-            MyTopAppBar(activity)
+            MyTopAppBar(activity, cartQuantity)
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
@@ -413,11 +425,14 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
                 onClick = {
                     coroutineScope.launch {
                         saveDishToCartFile(dish, quantity, activity)
+                        cartQuantity.value += quantity // Mise à jour de l'état partagé
                         val result = snackbarHostState.showSnackbar(
                             message = "Plat ajouté au panier",
                             actionLabel = "OK"
-                        )}  },
-                        modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Ajouter au panier - Total : ${"%.2f".format(totalPrice)}€")
             }
