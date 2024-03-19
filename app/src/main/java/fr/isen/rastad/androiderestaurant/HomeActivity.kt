@@ -60,6 +60,8 @@ import com.google.gson.Gson
 import org.json.JSONObject
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -172,12 +174,18 @@ data class Ingredient(
 object SimpleCache {
     private val categoryCache = mutableMapOf<String, List<Dish>>()
 
-    fun getCategory(categoryName: String): List<Dish>? {
-        return categoryCache[categoryName]
-    }
+    fun getCategory(categoryName: String): List<Dish>? = categoryCache[categoryName]
 
     fun setCategory(categoryName: String, dishes: List<Dish>) {
         categoryCache[categoryName] = dishes
+    }
+
+    fun invalidateCategory(categoryName: String) {
+        categoryCache.remove(categoryName)
+    }
+
+    fun invalidateAll() {
+        categoryCache.clear()
     }
 }
 
@@ -185,10 +193,11 @@ class CategoryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val categoryName = intent.getStringExtra("category_name") ?: "Category"
-        fetchMenu(categoryName)
+        fetchMenu(categoryName, forceRefresh = false)
     }
 
-    private fun fetchMenu(categoryName: String) {
+    private fun fetchMenu(categoryName: String, forceRefresh: Boolean) {
+        if (forceRefresh) SimpleCache.invalidateCategory(categoryName)
         SimpleCache.getCategory(categoryName)?.let { cachedDishes ->
             updateUI(categoryName, cachedDishes)
             return
@@ -218,7 +227,7 @@ class CategoryActivity : ComponentActivity() {
     private fun updateUI(categoryName: String, dishes: List<Dish>) {
         setContent {
             AndroidERestaurantTheme {
-                CategoryScreen(categoryName, dishes, onBack = { finish() } )
+                CategoryScreen(categoryName, dishes, onBack = { finish() }, onRefresh = { fetchMenu(categoryName, true) })
             }
         }
     }
@@ -227,9 +236,9 @@ class CategoryActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit) {
+fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit,  onRefresh: () -> Unit) {
     val context = LocalContext.current
-
+    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = false)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -237,7 +246,8 @@ fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit)
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
-                    }},
+                    }
+                },
                 colors = topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -245,15 +255,17 @@ fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit)
             )
         }
     ) { paddingValues ->
-        LazyColumn(modifier = Modifier.padding(paddingValues)) {
-            items(dishes) { dish ->
-                DishItem(dish = dish) {
-                    // Gestionnaire de clic pour chaque plat
-                    val dishJson = Gson().toJson(dish)
-                    val intent = Intent(context, DishDetailActivity::class.java).apply {
-                        putExtra("dish_details", dishJson)
+        SwipeRefresh(state = swipeRefreshState, onRefresh = onRefresh) {
+            LazyColumn(modifier = Modifier.padding(paddingValues)) {
+                items(dishes) { dish ->
+                    DishItem(dish = dish) {
+                        // Gestionnaire de clic pour chaque plat
+                        val dishJson = Gson().toJson(dish)
+                        val intent = Intent(context, DishDetailActivity::class.java).apply {
+                            putExtra("dish_details", dishJson)
+                        }
+                        context.startActivity(intent)
                     }
-                    context.startActivity(intent)
                 }
             }
         }

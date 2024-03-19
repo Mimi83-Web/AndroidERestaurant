@@ -62,6 +62,7 @@ dependencies {
     implementation (libs.gson)
     implementation(libs.coil.compose)
     implementation("com.google.accompanist:accompanist-pager:0.19.0")
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.19.0")
     implementation(libs.androidx.material3.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
