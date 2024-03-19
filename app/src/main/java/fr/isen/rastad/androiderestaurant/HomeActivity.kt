@@ -44,7 +44,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +76,7 @@ import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.File
+import java.util.UUID
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -225,6 +225,8 @@ fun MenuSection(title: String, onClick: () -> Unit) {
 data class MenuResponse(val data: List<Category>)
 data class Category(val name_fr: String, val items: List<Dish>)
 data class Dish(val name_fr: String, val images: List<String>, val prices: List<Price>, val ingredients: List<Ingredient>)
+
+
 data class Price(val price: String)
 data class Ingredient(
     val id: String,
@@ -362,6 +364,7 @@ class DishDetailActivity : ComponentActivity() {
 
 suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentActivity) {
     val cartItem = JSONObject().apply {
+        put("uuid", UUID.randomUUID().toString())
         put("name_fr", dish.name_fr)
         put("quantity", quantity)
         put("price", dish.prices.first().price)
@@ -373,37 +376,32 @@ suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentAct
     itemsArray.put(cartItem)
 
     file.writeText(itemsArray.toString())
-    //log
-    Log.d("saveDishToCartFile", "Plat ajouté au panier : $dish")
 
+    // Mise à jour de la quantité dans les préférences partagées
     val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
     val editor = sharedPreferences.edit()
     val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) + quantity
-    editor.putInt("cart_quantity", currentQuantity)
-    editor.apply()
+    editor.putInt("cart_quantity", currentQuantity).apply()
 }
 
 
-suspend fun readCartFile(activity: ComponentActivity): List<Pair<Dish, Int>> {
+suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish, Int>> {
     val filename = "cart.json"
     val file = File(activity.filesDir, filename)
-    if (!file.exists()) return emptyList()
+    val cartItems = mutableListOf<Triple<String, Dish, Int>>()
 
-    // Lire le contenu complet du fichier en une seule fois
-    val jsonStr = file.readText()
-    // Initialiser un tableau JSON à partir de la chaîne lue
-    val jsonArray = JSONArray(jsonStr)
-    val cartItems = mutableListOf<Pair<Dish, Int>>()
-
-    // Parcourir chaque élément du tableau JSON
-    for (i in 0 until jsonArray.length()) {
-        try {
-            val jsonObject = jsonArray.getJSONObject(i)
-            val dish = Gson().fromJson(jsonObject.toString(), Dish::class.java)
-            val quantity = jsonObject.getInt("quantity")
-            cartItems.add(Pair(dish, quantity))
-        } catch (e: Exception) {
-            Log.e("readCartFile", "Erreur lors de la lecture d'un élément du tableau JSON", e)
+    if (file.exists()) {
+        val jsonArray = JSONArray(file.readText())
+        for (i in 0 until jsonArray.length()) {
+            try {
+                val jsonObject = jsonArray.getJSONObject(i)
+                val uuid = jsonObject.getString("uuid")
+                val dish = Gson().fromJson(jsonObject.toString(), Dish::class.java)
+                val quantity = jsonObject.getInt("quantity")
+                cartItems.add(Triple(uuid, dish, quantity))
+            } catch (e: Exception) {
+                Log.e("readCartFile", "Erreur lors de la lecture d'un élément du tableau JSON", e)
+            }
         }
     }
 
@@ -570,32 +568,37 @@ class CartActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AndroidERestaurantTheme {
-                val cartItems = remember { mutableStateOf(listOf<Pair<Dish, Int>>()) }
+                // Mise à jour pour utiliser une liste de triplets (UUID, Dish, Quantity)
+                val cartItems = remember { mutableStateOf(listOf<Triple<String, Dish, Int>>()) }
                 val cartQuantity = remember { mutableStateOf(getCartQuantity(this)) }
                 val coroutineScope = rememberCoroutineScope()
 
                 LaunchedEffect(true) {
                     coroutineScope.launch {
+                        // Appel à la version mise à jour de readCartFile qui retourne des triplets
                         cartItems.value = readCartFile(this@CartActivity)
                     }
                 }
 
                 CartScreen(
                     cartItems = cartItems.value,
-                    onRemoveItem = { dishToRemove ->
+                    onRemoveItem = { uuidToRemove ->
                         coroutineScope.launch {
-                            removeFromCartFile(dishToRemove, this@CartActivity, cartQuantity)
+                            // Ici, removeFromCartFile attend désormais un UUID, pas un Dish
+                            removeFromCartFile(uuidToRemove.toString(), this@CartActivity)
                             cartItems.value = readCartFile(this@CartActivity)
+                            // Mettre à jour la quantité du panier après la suppression
+                            cartQuantity.value = getCartQuantity(this@CartActivity)
                         }
                     },
                     onPlaceOrder = {
-                        // Implement order placement logic here
                         Log.d("CartActivity", "Order placed.")
                         coroutineScope.launch {
                             clearCartFile(this@CartActivity)
-                            val sharedPreferences = getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+                            val sharedPreferences =
+                                getSharedPreferences("PREFERENCES", MODE_PRIVATE)
                             sharedPreferences.edit().putInt("cart_quantity", 0).apply()
-                            cartQuantity.value = 0 // Mise à jour de la quantité du panier à 0
+                            cartQuantity.value = 0
                             showOrderPlacedSnackbarAndReturnHome()
                         }
                     },
@@ -604,100 +607,94 @@ class CartActivity : ComponentActivity() {
             }
         }
     }
-}
-fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
-    val context = this
-    runOnUiThread {
-        setContent {
-            Snackbar {
-                Text("Commande passée avec succès")
+
+    fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
+        val context = this
+        runOnUiThread {
+            setContent {
+                Snackbar {
+                    Text("Commande passée avec succès")
+                }
             }
         }
+        // Délai pour permettre la lecture du Snackbar
+        Handler(Looper.getMainLooper()).postDelayed({
+            val homeIntent = Intent(context, HomeActivity::class.java)
+            homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(homeIntent)
+        }, 2000) // Délai en millisecondes
     }
-    // Délai pour permettre la lecture du Snackbar
-    Handler(Looper.getMainLooper()).postDelayed({
-        val homeIntent = Intent(context, HomeActivity::class.java)
-        homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(homeIntent)
-    }, 2000) // Délai en millisecondes
-}
 
-
-@Composable
-fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, onPlaceOrder: () -> Unit, cartQuantity: MutableState<Int>) {
-    Column {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(cartItems) { (dish, quantity) ->
-                Card(
-                    modifier = Modifier.padding(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
+    @Composable
+    fun CartScreen(
+        cartItems: List<Triple<String, Dish, Int>>,
+        onRemoveItem: (String) -> Unit,  // Modifié pour accepter l'UUID
+        onPlaceOrder: () -> Unit,
+        cartQuantity: MutableState<Int>
+    ) {
+        Column {
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(cartItems) { (uuid, dish, quantity) ->  // Décomposition du Triple
+                    Card(
+                        modifier = Modifier.padding(8.dp)
                     ) {
-                        Text("${dish.name_fr} x$quantity", style = MaterialTheme.typography.titleLarge)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { onRemoveItem(dish) }) {
-                            Text("Remove")
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text("${dish.name_fr} x$quantity", style = MaterialTheme.typography.titleLarge)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = { onRemoveItem(uuid) }) {  // Utilisation de l'UUID
+                                Text("Remove")
+                            }
                         }
                     }
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = { onPlaceOrder() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text("Place Order")
-        }
-    }
-}
-
-
-suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity, cartQuantity: MutableState<Int>) {
-    val filename = "cart.json"
-    val file = File(activity.filesDir, filename)
-    if (!file.exists()) return
-
-    val itemsArray = JSONArray(file.readText())
-    var i = 0
-    while (i < itemsArray.length()) {
-        val item = itemsArray.getJSONObject(i)
-        if (item.getString("name_fr") == dishToRemove.name_fr) {
-            val newQuantity = item.getInt("quantity") - 1
-            if (newQuantity > 0) {
-                item.put("quantity", newQuantity)
-                break
-            } else {
-                itemsArray.remove(i)
-                continue // Pas besoin d'incrémenter i car le tableau a changé
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { onPlaceOrder() },
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
+            ) {
+                Text("Place Order")
             }
         }
-        i++
     }
 
-    file.writeText(itemsArray.toString())
 
-    // Mise à jour de la quantité totale dans les préférences partagées
-    val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
-    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) - 1
-    sharedPreferences.edit().putInt("cart_quantity", maxOf(0, currentQuantity)).apply()
-    cartQuantity.value = maxOf(0, currentQuantity) // Mise à jour de l'état partagé
+    suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
+        val filename = "cart.json"
+        val file = File(activity.filesDir, filename)
+        if (!file.exists()) return
 
-}
+        val itemsArray = JSONArray(file.readText())
+        for (i in 0 until itemsArray.length()) {
+            val item = itemsArray.getJSONObject(i)
+            if (item.getString("uuid") == uuidToRemove) {
+                // Suppression basée sur l'UUID
+                itemsArray.remove(i)
+                break
+            }
+        }
+
+        file.writeText(itemsArray.toString())
+
+        // Mise à jour des préférences pour refléter la nouvelle quantité du panier
+        val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        editor.putInt("cart_quantity", sharedPreferences.getInt("cart_quantity", 0) - 1)
+        editor.apply()
+    }
 
 
-fun clearCartFile(activity: ComponentActivity) {
-    val file = File(activity.filesDir, "cart.json")
-    if(file.exists()) {
-        val deleted = file.delete()
-        if(deleted) {
-            Log.d("CartActivity", "Le fichier cart.json a été supprimé.")
-        } else {
-            Log.d("CartActivity", "Échec de la suppression du fichier cart.json.")
+    fun clearCartFile(activity: ComponentActivity) {
+        val file = File(activity.filesDir, "cart.json")
+        if (file.exists()) {
+            val deleted = file.delete()
+            if (deleted) {
+                Log.d("CartActivity", "Le fichier cart.json a été supprimé.")
+            } else {
+                Log.d("CartActivity", "Échec de la suppression du fichier cart.json.")
+            }
         }
     }
 }
-
