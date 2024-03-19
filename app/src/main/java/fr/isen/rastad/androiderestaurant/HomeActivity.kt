@@ -74,6 +74,7 @@ import com.google.accompanist.pager.rememberPagerState
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import java.io.File
 
 class HomeActivity : ComponentActivity() {
@@ -325,6 +326,7 @@ class DishDetailActivity : ComponentActivity() {
             }
         }
     }
+
 }
 
 
@@ -335,44 +337,49 @@ suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentAct
         put("name_fr", dish.name_fr)
         put("quantity", quantity)
         put("price", dish.prices.first().price)
-        // Ajoutez d'autres détails du plat ici si nécessaire
-    }.toString()
-    Log.d("DishDetailScreen", "Saving dish to cart: $cartItem")
+    }
 
     val filename = "cart.json"
     val file = File(activity.filesDir, filename)
-    file.appendText("$cartItem\n") // Ajoutez chaque plat sur une nouvelle ligne ou gérez autrement
-    Log.d("DishDetailScreen", "Saving to file: ${file.absolutePath}")
+    val itemsArray = if (file.exists()) JSONArray(file.readText()) else JSONArray()
+    itemsArray.put(cartItem)
+
+    file.writeText(itemsArray.toString())
+    //log
+    Log.d("saveDishToCartFile", "Plat ajouté au panier : $dish")
 
     val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
     val editor = sharedPreferences.edit()
-    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0)
-    editor.putInt("cart_quantity", currentQuantity + quantity)
+    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) + quantity
+    editor.putInt("cart_quantity", currentQuantity)
     editor.apply()
-
-    Log.d("DishDetailScreen", "Cart quantity updated: ${currentQuantity + quantity}")
-
 }
+
 
 suspend fun readCartFile(activity: ComponentActivity): List<Pair<Dish, Int>> {
     val filename = "cart.json"
     val file = File(activity.filesDir, filename)
     if (!file.exists()) return emptyList()
 
-    return file.readLines().mapNotNull { line ->
+    // Lire le contenu complet du fichier en une seule fois
+    val jsonStr = file.readText()
+    // Initialiser un tableau JSON à partir de la chaîne lue
+    val jsonArray = JSONArray(jsonStr)
+    val cartItems = mutableListOf<Pair<Dish, Int>>()
+
+    // Parcourir chaque élément du tableau JSON
+    for (i in 0 until jsonArray.length()) {
         try {
-            val jsonObject = JSONObject(line)
+            val jsonObject = jsonArray.getJSONObject(i)
             val dish = Gson().fromJson(jsonObject.toString(), Dish::class.java)
-            if (dish.name_fr == null) {
-                Log.e("readCartFile", "Le nom du plat est null pour la ligne : $line")
-            }
             val quantity = jsonObject.getInt("quantity")
-            Pair(dish, quantity)
+            cartItems.add(Pair(dish, quantity))
         } catch (e: Exception) {
-            Log.e("readCartFile", "Erreur lors de la lecture de la ligne : $line", e)
-            null
+            Log.e("readCartFile", "Erreur lors de la lecture d'un élément du tableau JSON", e)
         }
     }
+
+    return cartItems
 }
 
 
@@ -626,27 +633,36 @@ fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, o
 
 
 suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity, cartQuantity: MutableState<Int>) {
-    val cartItems = readCartFile(activity).toMutableList()
-    val itemIndex = cartItems.indexOfFirst { it.first.name_fr == dishToRemove.name_fr }
-    if (itemIndex != -1) {
-        val removedItemQuantity = cartItems[itemIndex].second
-        cartItems.removeAt(itemIndex)
+    val filename = "cart.json"
+    val file = File(activity.filesDir, filename)
+    if (!file.exists()) return
 
-        val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
-        val editor = sharedPreferences.edit()
-        val currentQuantity = sharedPreferences.getInt("cart_quantity", 0)
-        editor.putInt("cart_quantity", currentQuantity - removedItemQuantity)
-        editor.apply()
-        cartQuantity.value = currentQuantity - removedItemQuantity
-
-        val filename = "cart.json"
-        val file = File(activity.filesDir, filename)
-        file.writeText("") // Clear the file
-        cartItems.forEach { (dish, quantity) ->
-            saveDishToCartFile(dish, quantity, activity)
+    val itemsArray = JSONArray(file.readText())
+    var i = 0
+    while (i < itemsArray.length()) {
+        val item = itemsArray.getJSONObject(i)
+        if (item.getString("name_fr") == dishToRemove.name_fr) {
+            val newQuantity = item.getInt("quantity") - 1
+            if (newQuantity > 0) {
+                item.put("quantity", newQuantity)
+                break
+            } else {
+                itemsArray.remove(i)
+                continue // Pas besoin d'incrémenter i car le tableau a changé
+            }
         }
+        i++
     }
+
+    file.writeText(itemsArray.toString())
+
+    // Mise à jour de la quantité totale dans les préférences partagées
+    val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) - 1
+    sharedPreferences.edit().putInt("cart_quantity", maxOf(0, currentQuantity)).apply()
+    cartQuantity.value = maxOf(0, currentQuantity)
 }
+
 
 fun clearCartFile(activity: ComponentActivity) {
     val file = File(activity.filesDir, "cart.json")
