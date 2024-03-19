@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -553,6 +556,13 @@ class CartActivity : ComponentActivity() {
                     onPlaceOrder = {
                         // Implement order placement logic here
                         Log.d("CartActivity", "Order placed.")
+                        coroutineScope.launch {
+                            clearCartFile(this@CartActivity)
+                            val sharedPreferences = getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+                            sharedPreferences.edit().putInt("cart_quantity", 0).apply()
+                            cartQuantity.value = 0 // Mise à jour de la quantité du panier à 0
+                            showOrderPlacedSnackbarAndReturnHome()
+                        }
                     },
                     cartQuantity = cartQuantity
                 )
@@ -560,6 +570,23 @@ class CartActivity : ComponentActivity() {
         }
     }
 }
+fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
+    val context = this
+    runOnUiThread {
+        setContent {
+            Snackbar {
+                Text("Commande passée avec succès")
+            }
+        }
+    }
+    // Délai pour permettre la lecture du Snackbar
+    Handler(Looper.getMainLooper()).postDelayed({
+        val homeIntent = Intent(context, HomeActivity::class.java)
+        homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(homeIntent)
+    }, 2000) // Délai en millisecondes
+}
+
 
 fun getCartQuantity(context: Context): Int {
     val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
@@ -620,3 +647,16 @@ suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity, 
         }
     }
 }
+
+fun clearCartFile(activity: ComponentActivity) {
+    val file = File(activity.filesDir, "cart.json")
+    if(file.exists()) {
+        val deleted = file.delete()
+        if(deleted) {
+            Log.d("CartActivity", "Le fichier cart.json a été supprimé.")
+        } else {
+            Log.d("CartActivity", "Échec de la suppression du fichier cart.json.")
+        }
+    }
+}
+
