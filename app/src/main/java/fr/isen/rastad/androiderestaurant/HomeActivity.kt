@@ -272,8 +272,6 @@ fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit,
     }
 }
 
-
-
 class DishDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
