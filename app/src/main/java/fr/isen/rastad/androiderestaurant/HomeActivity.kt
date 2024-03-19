@@ -668,30 +668,28 @@ class CartActivity : ComponentActivity() {
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             // Affichage de l'image du plat
-                            val imageUrl = dish.images.firstOrNull()
-                            if (imageUrl != null) {
-                                Image(
-                                    painter = rememberImagePainter(imageUrl),
-                                    contentDescription = "${dish.name_fr} image",
-                                    modifier = Modifier
-                                        .height(150.dp)
-                                        .fillMaxWidth(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                            // Affichage de la deuxième image du plat
-                            val imageUrl2 = dish.images.drop(1).firstOrNull()
-                            if (imageUrl2 != null) {
-                                Image(
-                                    painter = rememberImagePainter(imageUrl2),
-                                    contentDescription = "${dish.name_fr} image",
-                                    modifier = Modifier
-                                        .height(150.dp)
-                                        .fillMaxWidth(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-
+                            val painter = rememberImagePainter(
+                                data = dish.images.firstOrNull(),
+                                builder = {
+                                    crossfade(true)
+                                    fallback(R.drawable.plat)
+                                    dish.images.drop(1).forEach {
+                                        if (it.isNotEmpty()) {
+                                            data(it)
+                                            return@forEach
+                                        }
+                                    }
+                                    error(R.drawable.plat)
+                                }
+                            )
+                            Image(
+                                painter = painter,
+                                contentDescription = "Dish Image",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp),
+                                contentScale = ContentScale.Crop
+                            )
 
 
                             Spacer(modifier = Modifier.height(8.dp))
