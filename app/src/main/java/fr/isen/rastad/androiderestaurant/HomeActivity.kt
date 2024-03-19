@@ -667,10 +667,13 @@ class CartActivity : ComponentActivity() {
         if (!file.exists()) return
 
         val itemsArray = JSONArray(file.readText())
+        var quantityRemoved = 0 // Pour suivre la quantité d'articles supprimés
+
         for (i in 0 until itemsArray.length()) {
             val item = itemsArray.getJSONObject(i)
             if (item.getString("uuid") == uuidToRemove) {
-                // Suppression basée sur l'UUID
+                // Enregistrer la quantité avant de supprimer l'élément
+                quantityRemoved = item.getInt("quantity")
                 itemsArray.remove(i)
                 break
             }
@@ -681,7 +684,7 @@ class CartActivity : ComponentActivity() {
         // Mise à jour des préférences pour refléter la nouvelle quantité du panier
         val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
         val editor = sharedPreferences.edit()
-        editor.putInt("cart_quantity", sharedPreferences.getInt("cart_quantity", 0) - 1)
+        editor.putInt("cart_quantity", sharedPreferences.getInt("cart_quantity", 0) - quantityRemoved)
         editor.apply()
     }
 
