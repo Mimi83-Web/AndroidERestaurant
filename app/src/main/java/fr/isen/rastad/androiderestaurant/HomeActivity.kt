@@ -330,7 +330,6 @@ fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit,
             LazyColumn(modifier = Modifier.padding(paddingValues)) {
                 items(dishes) { dish ->
                     DishItem(dish = dish) {
-                        // Gestionnaire de clic pour chaque plat
                         val dishJson = Gson().toJson(dish)
                         val intent = Intent(context, DishDetailActivity::class.java).apply {
                             putExtra("dish_details", dishJson)
@@ -368,11 +367,9 @@ suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: Compone
     val itemsArray = if (file.exists()) JSONArray(file.readText()) else JSONArray()
     var dishFound = false
 
-    // Rechercher si le plat existe déjà dans le fichier
     for (i in 0 until itemsArray.length()) {
         val item = itemsArray.getJSONObject(i)
         if (item.getString("name_fr") == dish.name_fr) {
-            // Plat trouvé, mettre à jour la quantité
             val newQuantity = item.getInt("quantity") + quantityToAdd
             item.put("quantity", newQuantity)
             dishFound = true
@@ -380,10 +377,9 @@ suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: Compone
         }
     }
 
-    // Si le plat n'existe pas, l'ajouter comme nouvelle entrée
     if (!dishFound) {
         val cartItem = JSONObject().apply {
-            put("uuid", UUID.randomUUID().toString()) // UUID peut être omis si on ne l'utilise pas pour identifier de manière unique les entrées
+            put("uuid", UUID.randomUUID().toString())
             put("name_fr", dish.name_fr)
             put("quantity", quantityToAdd)
             put("price", dish.prices.first().price)
@@ -391,10 +387,8 @@ suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: Compone
         itemsArray.put(cartItem)
     }
 
-    // Sauvegarder le fichier mis à jour
     file.writeText(itemsArray.toString())
 
-    // Mise à jour de la quantité globale dans les préférences partagées
     updateCartQuantity(activity, quantityToAdd)
 }
 
@@ -432,9 +426,9 @@ suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish,
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class, ExperimentalLayoutApi::class)
 fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivity, cartQuantity: MutableState<Int>) {
     val pagerState = rememberPagerState()
-    var quantity by remember { mutableStateOf(1) } // Correction ici
-    val pricePerDish = dish.prices.first().price.toFloat() // Supposons que prices.first().price contienne le prix unitaire sous forme de chaîne
-    val totalPrice = pricePerDish * quantity // Calcule le prix total
+    var quantity by remember { mutableStateOf(1) }
+    val pricePerDish = dish.prices.first().price.toFloat()
+    val totalPrice = pricePerDish * quantity
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -457,7 +451,7 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
                             data = dish.images[page],
                             builder = {
                                 crossfade(true)
-                                error(R.drawable.plat) // Image d'erreur si le chargement échoue
+                                error(R.drawable.plat)
                             }
                         ),
                         contentDescription = "Dish Image",
@@ -466,7 +460,6 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
                     )
                 }
             } else {
-                // Affiche une image par défaut si aucune image n'est présente
                 Image(
                     painter = painterResource(id = R.drawable.plat),
                     contentDescription = "Default Image",
@@ -628,7 +621,7 @@ class CartActivity : ComponentActivity() {
         }
     }
 
-    fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
+    private fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
         val context = this
         runOnUiThread {
             setContent {
@@ -697,7 +690,7 @@ class CartActivity : ComponentActivity() {
     }
 
 
-    suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
+    private suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
         val filename = "cart.json"
         val file = File(activity.filesDir, filename)
         if (!file.exists()) return
@@ -729,7 +722,7 @@ class CartActivity : ComponentActivity() {
     }
 
 
-    fun clearCartFile(activity: ComponentActivity) {
+    private fun clearCartFile(activity: ComponentActivity) {
         val file = File(activity.filesDir, "cart.json")
         if (file.exists()) {
             val deleted = file.delete()
