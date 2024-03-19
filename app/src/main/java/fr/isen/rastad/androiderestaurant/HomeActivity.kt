@@ -115,7 +115,6 @@ fun CartQuantityObserver(context: Context, onQuantityChange: (Int) -> Unit) {
 fun MyTopAppBar(activity: ComponentActivity) {
     var cartQuantity by remember { mutableStateOf(getCartQuantity(activity)) }
 
-    // Observer les changements de quantité
     CartQuantityObserver(context = activity) { quantity ->
         cartQuantity = quantity
     }
@@ -473,7 +472,6 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
             Text(text = "${dish.name_fr}", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
-                //espace entre les textes
                 maxItemsInEachRow = 4,
             ) {
                 dish.ingredients.forEach { ingredient ->
@@ -543,11 +541,10 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
             Text(text = dish.name_fr, style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(8.dp))
             val painter = rememberImagePainter(
-                data = dish.images.firstOrNull(), // Utilisez firstOrNull() pour éviter une exception si la liste est vide
+                data = dish.images.firstOrNull(),
                 builder = {
                     crossfade(true)
                     fallback(R.drawable.plat)
-                    //tester les autres images de la liste si la première est nulle
                   dish.images.drop(1).forEach {
                         if (it.isNotEmpty()) {
                             data(it)
@@ -580,14 +577,12 @@ class CartActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AndroidERestaurantTheme {
-                // Mise à jour pour utiliser une liste de triplets (UUID, Dish, Quantity)
                 val cartItems = remember { mutableStateOf(listOf<Triple<String, Dish, Int>>()) }
                 val cartQuantity = remember { mutableStateOf(getCartQuantity(this)) }
                 val coroutineScope = rememberCoroutineScope()
 
                 LaunchedEffect(true) {
                     coroutineScope.launch {
-                        // Appel à la version mise à jour de readCartFile qui retourne des triplets
                         cartItems.value = readCartFile(this@CartActivity)
                     }
                 }
@@ -596,10 +591,8 @@ class CartActivity : ComponentActivity() {
                     cartItems = cartItems.value,
                     onRemoveItem = { uuidToRemove ->
                         coroutineScope.launch {
-                            // Ici, removeFromCartFile attend désormais un UUID, pas un Dish
                             removeFromCartFile(uuidToRemove.toString(), this@CartActivity)
                             cartItems.value = readCartFile(this@CartActivity)
-                            // Mettre à jour la quantité du panier après la suppression
                             cartQuantity.value = getCartQuantity(this@CartActivity)
                         }
                     },
@@ -630,12 +623,11 @@ class CartActivity : ComponentActivity() {
                 }
             }
         }
-        // Délai pour permettre la lecture du Snackbar
         Handler(Looper.getMainLooper()).postDelayed({
             val homeIntent = Intent(context, HomeActivity::class.java)
             homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(homeIntent)
-        }, 2000) // Délai en millisecondes
+        }, 2000)
     }
 
 
@@ -643,7 +635,7 @@ class CartActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     fun CartScreen(
         cartItems: List<Triple<String, Dish, Int>>,
-        onRemoveItem: (String) -> Unit,  // Modifié pour accepter l'UUID
+        onRemoveItem: (String) -> Unit,
         onPlaceOrder: () -> Unit,
         onBack: () -> Unit,
         cartQuantity: MutableState<Int>
@@ -659,7 +651,7 @@ class CartActivity : ComponentActivity() {
             )
             Column {
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->  // Filtrer les éléments avec une quantité supérieure à zéro
+                    items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->
                         Card(
                             modifier = Modifier.padding(8.dp)
                         ) {
@@ -671,7 +663,7 @@ class CartActivity : ComponentActivity() {
                                     style = MaterialTheme.typography.titleLarge
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { onRemoveItem(uuid) }) {  // Utilisation de l'UUID
+                                Button(onClick = { onRemoveItem(uuid) }) {
                                     Text("Remove")
                                 }
                             }
@@ -702,10 +694,8 @@ class CartActivity : ComponentActivity() {
             if (item.getString("uuid") == uuidToRemove) {
                 val newQuantity = item.getInt("quantity") - 1
                 if (newQuantity <= 0) {
-                    // Si la nouvelle quantité est nulle ou négative, supprimer l'élément du panier
                     itemsArray.remove(i)
                 } else {
-                    // Mettre à jour la quantité sinon
                     item.put("quantity", newQuantity)
                 }
                 break
@@ -714,7 +704,6 @@ class CartActivity : ComponentActivity() {
 
         file.writeText(itemsArray.toString())
 
-        // Mise à jour des préférences pour refléter la nouvelle quantité du panier
         val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
         val editor = sharedPreferences.edit()
         editor.putInt("cart_quantity", sharedPreferences.getInt("cart_quantity", 0) - 1)
