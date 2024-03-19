@@ -329,7 +329,7 @@ class DishDetailActivity : ComponentActivity() {
 
 suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentActivity) {
     val cartItem = JSONObject().apply {
-        put("name", dish.name_fr)
+        put("name_fr", dish.name_fr)
         put("quantity", quantity)
         put("price", dish.prices.first().price)
         // Ajoutez d'autres détails du plat ici si nécessaire
@@ -360,9 +360,13 @@ suspend fun readCartFile(activity: ComponentActivity): List<Pair<Dish, Int>> {
         try {
             val jsonObject = JSONObject(line)
             val dish = Gson().fromJson(jsonObject.toString(), Dish::class.java)
+            if (dish.name_fr == null) {
+                Log.e("readCartFile", "Le nom du plat est null pour la ligne : $line")
+            }
             val quantity = jsonObject.getInt("quantity")
             Pair(dish, quantity)
         } catch (e: Exception) {
+            Log.e("readCartFile", "Erreur lors de la lecture de la ligne : $line", e)
             null
         }
     }
@@ -529,6 +533,7 @@ class CartActivity : ComponentActivity() {
         setContent {
             AndroidERestaurantTheme {
                 val cartItems = remember { mutableStateOf(listOf<Pair<Dish, Int>>()) }
+                val cartQuantity = remember { mutableStateOf(getCartQuantity(this)) }
                 val coroutineScope = rememberCoroutineScope()
 
                 LaunchedEffect(true) {
@@ -541,27 +546,27 @@ class CartActivity : ComponentActivity() {
                     cartItems = cartItems.value,
                     onRemoveItem = { dishToRemove ->
                         coroutineScope.launch {
-                            removeFromCartFile(dishToRemove, this@CartActivity)
+                            removeFromCartFile(dishToRemove, this@CartActivity, cartQuantity)
                             cartItems.value = readCartFile(this@CartActivity)
                         }
                     },
                     onPlaceOrder = {
-                        Log.d("CartActivity", "La commande a été passée.")
-                        // Ici, implémentez la logique de passation de commande, comme l'envoi d'une requête au serveur.
-                    }
+                        // Implement order placement logic here
+                        Log.d("CartActivity", "Order placed.")
+                    },
+                    cartQuantity = cartQuantity
                 )
             }
         }
     }
 }
 
-
 fun getCartQuantity(context: Context): Int {
     val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
     return sharedPreferences.getInt("cart_quantity", 0)
 }
 @Composable
-fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, onPlaceOrder: () -> Unit) {
+fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, onPlaceOrder: () -> Unit, cartQuantity: MutableState<Int>) {
     Column {
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(cartItems) { (dish, quantity) ->
@@ -574,7 +579,7 @@ fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, o
                         Text("${dish.name_fr} x$quantity", style = MaterialTheme.typography.titleLarge)
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(onClick = { onRemoveItem(dish) }) {
-                            Text("Supprimer")
+                            Text("Remove")
                         }
                     }
                 }
@@ -587,17 +592,26 @@ fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, o
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Text("Passer la commande")
+            Text("Place Order")
         }
     }
 }
 
 
-suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity) {
+suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity, cartQuantity: MutableState<Int>) {
     val cartItems = readCartFile(activity).toMutableList()
     val itemIndex = cartItems.indexOfFirst { it.first.name_fr == dishToRemove.name_fr }
     if (itemIndex != -1) {
+        val removedItemQuantity = cartItems[itemIndex].second
         cartItems.removeAt(itemIndex)
+
+        val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        val currentQuantity = sharedPreferences.getInt("cart_quantity", 0)
+        editor.putInt("cart_quantity", currentQuantity - removedItemQuantity)
+        editor.apply()
+        cartQuantity.value = currentQuantity - removedItemQuantity
+
         val filename = "cart.json"
         val file = File(activity.filesDir, filename)
         file.writeText("") // Clear the file
