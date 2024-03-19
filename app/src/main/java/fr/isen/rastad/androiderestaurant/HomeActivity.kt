@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -96,12 +97,33 @@ class HomeActivity : ComponentActivity() {
 }
 
 @Composable
+fun CartQuantityObserver(context: Context, onQuantityChange: (Int) -> Unit) {
+    val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+    LaunchedEffect(key1 = sharedPreferences) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "cart_quantity") {
+                onQuantityChange(sharedPreferences.getInt("cart_quantity", 0))
+            }
+        }
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+    }
+}
+
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun MyTopAppBar(activity: ComponentActivity, cartQuantity: MutableState<Int>) {
+fun MyTopAppBar(activity: ComponentActivity) {
+    var cartQuantity by remember { mutableStateOf(getCartQuantity(activity)) }
+
+    // Observer les changements de quantité
+    CartQuantityObserver(context = activity) { quantity ->
+        cartQuantity = quantity
+    }
+
     TopAppBar(
         title = { Text("DroidRestaurant") },
         actions = {
-            Text(text = cartQuantity.value.toString(), modifier = Modifier.padding(end = 8.dp))
+            Text(text = cartQuantity.toString(), modifier = Modifier.padding(end = 8.dp))
             IconButton(onClick = {
                 activity.startActivity(Intent(activity, CartActivity::class.java))
             }) {
@@ -115,6 +137,12 @@ fun MyTopAppBar(activity: ComponentActivity, cartQuantity: MutableState<Int>) {
         }
     )
 }
+
+fun getCartQuantity(context: Context): Int {
+    val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+    return sharedPreferences.getInt("cart_quantity", 0)
+}
+
 
 
 @Composable
@@ -395,7 +423,7 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
 
     Scaffold(
         topBar = {
-            MyTopAppBar(activity, cartQuantity)
+            MyTopAppBar(activity)
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
 
@@ -595,10 +623,6 @@ fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
 }
 
 
-fun getCartQuantity(context: Context): Int {
-    val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
-    return sharedPreferences.getInt("cart_quantity", 0)
-}
 @Composable
 fun CartScreen(cartItems: List<Pair<Dish, Int>>, onRemoveItem: (Dish) -> Unit, onPlaceOrder: () -> Unit, cartQuantity: MutableState<Int>) {
     Column {
@@ -660,7 +684,8 @@ suspend fun removeFromCartFile(dishToRemove: Dish, activity: ComponentActivity, 
     val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
     val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) - 1
     sharedPreferences.edit().putInt("cart_quantity", maxOf(0, currentQuantity)).apply()
-    cartQuantity.value = maxOf(0, currentQuantity)
+    cartQuantity.value = maxOf(0, currentQuantity) // Mise à jour de l'état partagé
+
 }
 
 
