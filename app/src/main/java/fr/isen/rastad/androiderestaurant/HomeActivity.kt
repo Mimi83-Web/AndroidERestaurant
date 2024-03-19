@@ -7,7 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -299,6 +297,7 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit) {
     val pricePerDish = dish.prices.first().price.toFloat() // Supposons que prices.first().price contienne le prix unitaire sous forme de chaîne
     val totalPrice = pricePerDish * quantity // Calcule le prix total
 
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -316,18 +315,33 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit) {
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
-            // Carrousel d'images
-            HorizontalPager(
-                count = dish.images.size,
-                state = pagerState,
-                modifier = Modifier
-                    .height(200.dp)
-                    .fillMaxWidth()
-            ) { page ->
+            if (dish.images.isNotEmpty()) {
+                HorizontalPager(
+                    count = dish.images.size,
+                    state = pagerState,
+                    modifier = Modifier.height(200.dp).fillMaxWidth()
+                ) { page ->
+                    Image(
+                        painter = rememberImagePainter(
+                            data = dish.images[page],
+                            builder = {
+                                crossfade(true)
+                                error(R.drawable.plat) // Image d'erreur si le chargement échoue
+                            }
+                        ),
+                        contentDescription = "Dish Image",
+                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            } else {
+                // Affiche une image par défaut si aucune image n'est présente
                 Image(
-                    painter = rememberImagePainter(dish.images[page]),
-                    contentDescription = "Dish Image",
-                    modifier = Modifier.fillMaxWidth(),
+                    painter = painterResource(id = R.drawable.plat),
+                    contentDescription = "Default Image",
+                    modifier = Modifier
+                        .height(200.dp)
+                        .fillMaxWidth(),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -399,7 +413,7 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
                     crossfade(true)
                     fallback(R.drawable.plat)
                     //tester les autres images de la liste si la première est nulle
-                   dish.images.drop(1).forEach {
+                  dish.images.drop(1).forEach {
                         if (it.isNotEmpty()) {
                             data(it)
                             return@forEach
@@ -423,6 +437,3 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
         }
     }
 }
-
-
-
