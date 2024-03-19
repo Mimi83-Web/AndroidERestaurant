@@ -1,5 +1,7 @@
 package fr.isen.rastad.androiderestaurant
 
+import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -40,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +65,8 @@ import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import kotlinx.coroutines.launch
+import java.io.File
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,16 +88,31 @@ class HomeActivity : ComponentActivity() {
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
+fun MyTopAppBar(activity: ComponentActivity) {
+    val cartQuantity = remember { mutableStateOf(getCartQuantity(activity)) }
+    TopAppBar(
+        title = { Text("DroidRestaurant") },
+        actions = {
+            Text(text = cartQuantity.value.toString(), modifier = Modifier.padding(end = 8.dp))
+            IconButton(onClick = {
+                activity.startActivity(Intent(activity, CartActivity::class.java))
+            }) {
+                Icon(Icons.Filled.ShoppingCart, contentDescription = "Cart")
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = { activity.onBackPressed() }) {
+                Icon(Icons.Filled.ArrowBack, "Back")
+            }
+        }
+    )
+}
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun Greeting(activity: ComponentActivity) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(text = "DroidRestaurant") },
-                colors = topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
+                MyTopAppBar(activity)
         }
     ) { innerPadding ->
         Column(
@@ -232,6 +254,10 @@ class CategoryActivity : ComponentActivity() {
 }
 
 
+
+
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit,  onRefresh: () -> Unit) {
@@ -269,6 +295,7 @@ fun CategoryScreen(categoryName: String, dishes: List<Dish>, onBack: () -> Unit,
         }
     }
 }
+
 class DishDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -277,7 +304,7 @@ class DishDetailActivity : ComponentActivity() {
 
         setContent {
             AndroidERestaurantTheme {
-                DishDetailScreen(dish = dish, onBack = { finish() })
+                DishDetailScreen(dish = dish, onBack = { finish() }, activity = this)
             }
         }
     }
@@ -286,32 +313,44 @@ class DishDetailActivity : ComponentActivity() {
 
 
 
+suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentActivity) {
+    val cartItem = JSONObject().apply {
+        put("name", dish.name_fr)
+        put("quantity", quantity)
+        put("price", dish.prices.first().price)
+        // Ajoutez d'autres détails du plat ici si nécessaire
+    }.toString()
+    Log.d("DishDetailScreen", "Saving dish to cart: $cartItem")
 
+    val filename = "cart.json"
+    val file = File(activity.filesDir, filename)
+    file.appendText("$cartItem\n") // Ajoutez chaque plat sur une nouvelle ligne ou gérez autrement
+    Log.d("DishDetailScreen", "Saving to file: ${file.absolutePath}")
+
+    val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+    val editor = sharedPreferences.edit()
+    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0)
+    editor.putInt("cart_quantity", currentQuantity + quantity)
+    editor.apply()
+
+    Log.d("DishDetailScreen", "Cart quantity updated: ${currentQuantity + quantity}")
+
+}
 
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class, ExperimentalLayoutApi::class)
-fun DishDetailScreen(dish: Dish, onBack: () -> Unit) {
+fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivity) {
     val pagerState = rememberPagerState()
     var quantity by remember { mutableStateOf(1) } // Correction ici
     val pricePerDish = dish.prices.first().price.toFloat() // Supposons que prices.first().price contienne le prix unitaire sous forme de chaîne
     val totalPrice = pricePerDish * quantity // Calcule le prix total
-
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(text = dish.name_fr) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
+            MyTopAppBar(activity)
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
@@ -371,8 +410,14 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(8.dp))
             Button(
-                onClick = { /* Ajoutez votre action ici */ },
-                modifier = Modifier.fillMaxWidth()
+                onClick = {
+                    coroutineScope.launch {
+                        saveDishToCartFile(dish, quantity, activity)
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Plat ajouté au panier",
+                            actionLabel = "OK"
+                        )}  },
+                        modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Ajouter au panier - Total : ${"%.2f".format(totalPrice)}€")
             }
@@ -380,6 +425,8 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit) {
         }
     }
 }
+
+
 
 @Composable
 fun Chip(label: String) {
@@ -437,3 +484,21 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
         }
     }
 }
+
+
+class CartActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            AndroidERestaurantTheme {
+
+            }
+        }
+    }
+}
+
+fun getCartQuantity(context: Context): Int {
+    val sharedPreferences = context.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+    return sharedPreferences.getInt("cart_quantity", 0)
+}
+
