@@ -362,28 +362,47 @@ class DishDetailActivity : ComponentActivity() {
 
 
 
-suspend fun saveDishToCartFile(dish: Dish, quantity: Int, activity: ComponentActivity) {
-    val cartItem = JSONObject().apply {
-        put("uuid", UUID.randomUUID().toString())
-        put("name_fr", dish.name_fr)
-        put("quantity", quantity)
-        put("price", dish.prices.first().price)
-    }
-
+suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: ComponentActivity) {
     val filename = "cart.json"
     val file = File(activity.filesDir, filename)
     val itemsArray = if (file.exists()) JSONArray(file.readText()) else JSONArray()
-    itemsArray.put(cartItem)
+    var dishFound = false
 
+    // Rechercher si le plat existe déjà dans le fichier
+    for (i in 0 until itemsArray.length()) {
+        val item = itemsArray.getJSONObject(i)
+        if (item.getString("name_fr") == dish.name_fr) {
+            // Plat trouvé, mettre à jour la quantité
+            val newQuantity = item.getInt("quantity") + quantityToAdd
+            item.put("quantity", newQuantity)
+            dishFound = true
+            break
+        }
+    }
+
+    // Si le plat n'existe pas, l'ajouter comme nouvelle entrée
+    if (!dishFound) {
+        val cartItem = JSONObject().apply {
+            put("uuid", UUID.randomUUID().toString()) // UUID peut être omis si on ne l'utilise pas pour identifier de manière unique les entrées
+            put("name_fr", dish.name_fr)
+            put("quantity", quantityToAdd)
+            put("price", dish.prices.first().price)
+        }
+        itemsArray.put(cartItem)
+    }
+
+    // Sauvegarder le fichier mis à jour
     file.writeText(itemsArray.toString())
 
-    // Mise à jour de la quantité dans les préférences partagées
-    val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
-    val editor = sharedPreferences.edit()
-    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) + quantity
-    editor.putInt("cart_quantity", currentQuantity).apply()
+    // Mise à jour de la quantité globale dans les préférences partagées
+    updateCartQuantity(activity, quantityToAdd)
 }
 
+fun updateCartQuantity(activity: ComponentActivity, quantityToAdd: Int) {
+    val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
+    val currentQuantity = sharedPreferences.getInt("cart_quantity", 0) + quantityToAdd
+    sharedPreferences.edit().putInt("cart_quantity", currentQuantity).apply()
+}
 
 suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish, Int>> {
     val filename = "cart.json"
@@ -634,7 +653,7 @@ class CartActivity : ComponentActivity() {
     ) {
         Column {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(cartItems) { (uuid, dish, quantity) ->  // Décomposition du Triple
+                items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->  // Filtrer les éléments avec une quantité supérieure à zéro
                     Card(
                         modifier = Modifier.padding(8.dp)
                     ) {
@@ -661,20 +680,24 @@ class CartActivity : ComponentActivity() {
     }
 
 
-    suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
+    private suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
         val filename = "cart.json"
         val file = File(activity.filesDir, filename)
         if (!file.exists()) return
 
         val itemsArray = JSONArray(file.readText())
-        var quantityRemoved = 0 // Pour suivre la quantité d'articles supprimés
 
         for (i in 0 until itemsArray.length()) {
             val item = itemsArray.getJSONObject(i)
             if (item.getString("uuid") == uuidToRemove) {
-                // Enregistrer la quantité avant de supprimer l'élément
-                quantityRemoved = item.getInt("quantity")
-                itemsArray.remove(i)
+                val newQuantity = item.getInt("quantity") - 1
+                if (newQuantity <= 0) {
+                    // Si la nouvelle quantité est nulle ou négative, supprimer l'élément du panier
+                    itemsArray.remove(i)
+                } else {
+                    // Mettre à jour la quantité sinon
+                    item.put("quantity", newQuantity)
+                }
                 break
             }
         }
@@ -684,7 +707,7 @@ class CartActivity : ComponentActivity() {
         // Mise à jour des préférences pour refléter la nouvelle quantité du panier
         val sharedPreferences = activity.getSharedPreferences("PREFERENCES", MODE_PRIVATE)
         val editor = sharedPreferences.edit()
-        editor.putInt("cart_quantity", sharedPreferences.getInt("cart_quantity", 0) - quantityRemoved)
+        editor.putInt("cart_quantity", sharedPreferences.getInt("cart_quantity", 0) - 1)
         editor.apply()
     }
 
