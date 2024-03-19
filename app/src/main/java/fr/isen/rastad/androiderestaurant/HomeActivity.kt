@@ -621,6 +621,7 @@ class CartActivity : ComponentActivity() {
                             showOrderPlacedSnackbarAndReturnHome()
                         }
                     },
+                    onBack = { finish() },
                     cartQuantity = cartQuantity
                 )
             }
@@ -644,43 +645,59 @@ class CartActivity : ComponentActivity() {
         }, 2000) // Délai en millisecondes
     }
 
+
     @Composable
+    @OptIn(ExperimentalMaterial3Api::class)
     fun CartScreen(
         cartItems: List<Triple<String, Dish, Int>>,
         onRemoveItem: (String) -> Unit,  // Modifié pour accepter l'UUID
         onPlaceOrder: () -> Unit,
+        onBack: () -> Unit,
         cartQuantity: MutableState<Int>
     ) {
         Column {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->  // Filtrer les éléments avec une quantité supérieure à zéro
-                    Card(
-                        modifier = Modifier.padding(8.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
+            TopAppBar(
+                title = { Text("Cart") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, "Back")
+                    }
+                }
+            )
+            Column {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->  // Filtrer les éléments avec une quantité supérieure à zéro
+                        Card(
+                            modifier = Modifier.padding(8.dp)
                         ) {
-                            Text("${dish.name_fr} x$quantity", style = MaterialTheme.typography.titleLarge)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(onClick = { onRemoveItem(uuid) }) {  // Utilisation de l'UUID
-                                Text("Remove")
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    "${dish.name_fr} x$quantity",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(onClick = { onRemoveItem(uuid) }) {  // Utilisation de l'UUID
+                                    Text("Remove")
+                                }
                             }
                         }
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { onPlaceOrder() },
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
-            ) {
-                Text("Place Order")
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { onPlaceOrder() },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    Text("Place Order")
+                }
             }
         }
     }
 
 
-    private suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
+    suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
         val filename = "cart.json"
         val file = File(activity.filesDir, filename)
         if (!file.exists()) return
