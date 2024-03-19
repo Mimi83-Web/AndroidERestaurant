@@ -365,10 +365,12 @@ suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: Compone
     val file = File(activity.filesDir, filename)
     val itemsArray = if (file.exists()) JSONArray(file.readText()) else JSONArray()
     var dishFound = false
+    val gson = Gson()
 
     for (i in 0 until itemsArray.length()) {
         val item = itemsArray.getJSONObject(i)
-        if (item.getString("name_fr") == dish.name_fr) {
+        val existingDish = gson.fromJson(item.getString("dish"), Dish::class.java)
+        if (existingDish.name_fr == dish.name_fr) {
             val newQuantity = item.getInt("quantity") + quantityToAdd
             item.put("quantity", newQuantity)
             dishFound = true
@@ -377,11 +379,11 @@ suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: Compone
     }
 
     if (!dishFound) {
+        val dishJson = gson.toJson(dish) // Convert the Dish object to a JSON string
         val cartItem = JSONObject().apply {
             put("uuid", UUID.randomUUID().toString())
-            put("name_fr", dish.name_fr)
+            put("dish", dishJson) // Store the entire Dish object as a JSON string
             put("quantity", quantityToAdd)
-            put("price", dish.prices.first().price)
         }
         itemsArray.put(cartItem)
     }
@@ -401,6 +403,7 @@ suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish,
     val filename = "cart.json"
     val file = File(activity.filesDir, filename)
     val cartItems = mutableListOf<Triple<String, Dish, Int>>()
+    val gson = Gson()
 
     if (file.exists()) {
         val jsonArray = JSONArray(file.readText())
@@ -408,8 +411,11 @@ suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish,
             try {
                 val jsonObject = jsonArray.getJSONObject(i)
                 val uuid = jsonObject.getString("uuid")
-                val dish = Gson().fromJson(jsonObject.toString(), Dish::class.java)
+                val dishJson = jsonObject.getString("dish") // Récupérer la chaîne JSON de l'objet Dish
+                val dish = gson.fromJson(dishJson, Dish::class.java) // Désérialiser la chaîne en objet Dish
                 val quantity = jsonObject.getInt("quantity")
+                // La ligne suivante a été retirée car le prix fait désormais partie de l'objet Dish
+                // val price = jsonObject.getString("price")
                 cartItems.add(Triple(uuid, dish, quantity))
             } catch (e: Exception) {
                 Log.e("readCartFile", "Erreur lors de la lecture d'un élément du tableau JSON", e)
@@ -419,7 +425,6 @@ suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish,
 
     return cartItems
 }
-
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class, ExperimentalLayoutApi::class)
@@ -649,37 +654,77 @@ class CartActivity : ComponentActivity() {
                     }
                 }
             )
-            Column {
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->
-                        Card(
-                            modifier = Modifier.padding(8.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    "${dish.name_fr} x$quantity",
-                                    style = MaterialTheme.typography.titleLarge
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(cartItems.filter { it.third > 0 }) { (uuid, dish, quantity) ->
+                    Card(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "${dish.name_fr} x$quantity",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Affichage de l'image du plat
+                            val imageUrl = dish.images.firstOrNull()
+                            if (imageUrl != null) {
+                                Image(
+                                    painter = rememberImagePainter(imageUrl),
+                                    contentDescription = "${dish.name_fr} image",
+                                    modifier = Modifier
+                                        .height(150.dp)
+                                        .fillMaxWidth(),
+                                    contentScale = ContentScale.Crop
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { onRemoveItem(uuid) }) {
-                                    Text("Remove")
-                                }
+                            }
+                            // Affichage de la deuxième image du plat
+                            val imageUrl2 = dish.images.drop(1).firstOrNull()
+                            if (imageUrl2 != null) {
+                                Image(
+                                    painter = rememberImagePainter(imageUrl2),
+                                    contentDescription = "${dish.name_fr} image",
+                                    modifier = Modifier
+                                        .height(150.dp)
+                                        .fillMaxWidth(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+
+
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Affichage du prix
+                            Text(
+                                "Prix unitaire: ${dish.prices.first().price}€",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Total: ${"%.2f".format(dish.prices.first().price.toDouble() * quantity)}€",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = { onRemoveItem(uuid) }) {
+                                Text("Remove")
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = { onPlaceOrder() },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp)
-                ) {
-                    Text("Place Order")
-                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { onPlaceOrder() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text("Place Order: Total price ${"%.2f".format(cartItems.sumOf { it.second.prices.first().price.toDouble() * it.third })}€")
             }
         }
     }
+
 
 
     private suspend fun removeFromCartFile(uuidToRemove: String, activity: ComponentActivity) {
