@@ -169,6 +169,18 @@ data class Ingredient(
     val id_pizza: String
 )
 
+object SimpleCache {
+    private val categoryCache = mutableMapOf<String, List<Dish>>()
+
+    fun getCategory(categoryName: String): List<Dish>? {
+        return categoryCache[categoryName]
+    }
+
+    fun setCategory(categoryName: String, dishes: List<Dish>) {
+        categoryCache[categoryName] = dishes
+    }
+}
+
 class CategoryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -376,20 +388,18 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
             val painter = rememberImagePainter(
                 data = dish.images.firstOrNull(), // Utilisez firstOrNull() pour éviter une exception si la liste est vide
                 builder = {
+                    crossfade(true)
                     fallback(R.drawable.plat)
                     //tester les autres images de la liste si la première est nulle
-                    dish.images.drop(1).forEach {
+                   dish.images.drop(1).forEach {
                         if (it.isNotEmpty()) {
                             data(it)
                             return@forEach
                         }
                     }
                     error(R.drawable.plat)
-                    crossfade(true)
                 }
             )
-
-            if (dish.images.isNotEmpty()) {
                 Image(
                     painter = painter,
                     contentDescription = "Dish Image",
@@ -399,7 +409,6 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
                     contentScale = ContentScale.Crop
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-            }
 
             Text(text = "Prix: ${dish.prices.first().price}€", style = MaterialTheme.typography.bodyMedium)
 
@@ -407,17 +416,5 @@ fun DishItem(dish: Dish, onClick: () -> Unit) {
     }
 }
 
-
-object SimpleCache {
-    private val categoryCache = mutableMapOf<String, List<Dish>>()
-
-    fun getCategory(categoryName: String): List<Dish>? {
-        return categoryCache[categoryName]
-    }
-
-    fun setCategory(categoryName: String, dishes: List<Dish>) {
-        categoryCache[categoryName] = dishes
-    }
-}
 
 
