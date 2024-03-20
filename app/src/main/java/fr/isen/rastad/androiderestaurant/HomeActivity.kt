@@ -443,12 +443,16 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
 
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
+        Column(modifier = Modifier
+            .padding(innerPadding)
+            .padding(16.dp)) {
             if (dish.images.isNotEmpty()) {
                 HorizontalPager(
                     count = dish.images.size,
                     state = pagerState,
-                    modifier = Modifier.height(200.dp).fillMaxWidth()
+                    modifier = Modifier
+                        .height(200.dp)
+                        .fillMaxWidth()
                 ) { page ->
                     Image(
                         painter = rememberImagePainter(
@@ -709,7 +713,11 @@ class CartActivity : ComponentActivity() {
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(onClick = { onRemoveItem(uuid) }) {
-                                Text("Remove 1")
+                                Text("Supprimer 1 quantité")
+                            }
+                            //ajouter un bouton pour continuer les achats
+                            Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                                Text("Continuer les achats")
                             }
                         }
                     }
