@@ -712,12 +712,22 @@ class CartActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Button(onClick = { onRemoveItem(uuid) }) {
-                                Text("Supprimer 1 quantité")
-                            }
-                            //ajouter un bouton pour continuer les achats
-                            Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                                Text("Continuer les achats")
+                            Row { // Commence une nouvelle Row pour les boutons
+                                Button(
+                                    onClick = { onRemoveItem(uuid) },
+                                    modifier = Modifier
+                                        .padding(end = 4.dp) // Ajoute un peu de padding entre les boutons
+                                ) {
+                                    Text("Supprimer 1 quantité")
+                                }
+
+                                Button(
+                                    onClick = onBack,
+                                    modifier = Modifier
+                                        .padding(start = 4.dp) // Padding pour éviter le chevauchement des boutons
+                                ) {
+                                    Text("Continuer les achats")
+                                }
                             }
                         }
                     }
