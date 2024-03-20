@@ -39,8 +39,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -500,10 +502,15 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
                     coroutineScope.launch {
                         saveDishToCartFile(dish, quantity, activity)
                         cartQuantity.value += quantity
-                        snackbarHostState.showSnackbar(
+                        val snackbarResult = snackbarHostState.showSnackbar(
                             message = "Plat ajouté au panier",
-                            actionLabel = "OK"
+                            actionLabel = "Voir le panier",
+                            duration = SnackbarDuration.Indefinite
                         )
+                        if (snackbarResult == SnackbarResult.ActionPerformed) {
+                            // L'utilisateur a choisi de voir le panier, naviguer vers CartScreen
+                            activity.startActivity(Intent(activity, CartActivity::class.java))
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -702,7 +709,7 @@ class CartActivity : ComponentActivity() {
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(onClick = { onRemoveItem(uuid) }) {
-                                Text("Remove")
+                                Text("Remove 1")
                             }
                         }
                     }
