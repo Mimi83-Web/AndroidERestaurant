@@ -379,10 +379,10 @@ suspend fun saveDishToCartFile(dish: Dish, quantityToAdd: Int, activity: Compone
     }
 
     if (!dishFound) {
-        val dishJson = gson.toJson(dish) // Convert the Dish object to a JSON string
+        val dishJson = gson.toJson(dish)
         val cartItem = JSONObject().apply {
             put("uuid", UUID.randomUUID().toString())
-            put("dish", dishJson) // Store the entire Dish object as a JSON string
+            put("dish", dishJson)
             put("quantity", quantityToAdd)
         }
         itemsArray.put(cartItem)
@@ -411,11 +411,9 @@ suspend fun readCartFile(activity: ComponentActivity): List<Triple<String, Dish,
             try {
                 val jsonObject = jsonArray.getJSONObject(i)
                 val uuid = jsonObject.getString("uuid")
-                val dishJson = jsonObject.getString("dish") // Récupérer la chaîne JSON de l'objet Dish
-                val dish = gson.fromJson(dishJson, Dish::class.java) // Désérialiser la chaîne en objet Dish
+                val dishJson = jsonObject.getString("dish")
+                val dish = gson.fromJson(dishJson, Dish::class.java)
                 val quantity = jsonObject.getInt("quantity")
-                // La ligne suivante a été retirée car le prix fait désormais partie de l'objet Dish
-                // val price = jsonObject.getString("price")
                 cartItems.add(Triple(uuid, dish, quantity))
             } catch (e: Exception) {
                 Log.e("readCartFile", "Erreur lors de la lecture d'un élément du tableau JSON", e)
@@ -501,7 +499,7 @@ fun DishDetailScreen(dish: Dish, onBack: () -> Unit,  activity: ComponentActivit
                 onClick = {
                     coroutineScope.launch {
                         saveDishToCartFile(dish, quantity, activity)
-                        cartQuantity.value += quantity // Mise à jour de l'état partagé
+                        cartQuantity.value += quantity
                         snackbarHostState.showSnackbar(
                             message = "Plat ajouté au panier",
                             actionLabel = "OK"
@@ -632,7 +630,7 @@ class CartActivity : ComponentActivity() {
             val homeIntent = Intent(context, HomeActivity::class.java)
             homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(homeIntent)
-        }, 2000)
+        }, 500)
     }
 
 
@@ -667,7 +665,6 @@ class CartActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            // Affichage de l'image du plat
                             val painter = rememberImagePainter(
                                 data = dish.images.firstOrNull(),
                                 builder = {
