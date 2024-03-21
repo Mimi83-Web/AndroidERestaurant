@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -64,6 +67,7 @@ import androidx.compose.ui.res.painterResource
 import fr.isen.rastad.androiderestaurant.ui.theme.AndroidERestaurantTheme
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.rememberImagePainter
 import com.android.volley.Request
 import com.android.volley.toolbox.JsonObjectRequest
@@ -79,6 +83,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.File
 import java.util.UUID
+import com.bumptech.glide.load.resource.gif.GifDrawable
+import com.bumptech.glide.request.RequestOptions
+import com.skydoves.landscapist.glide.GlideImage
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -153,11 +160,6 @@ fun Greeting(activity: ComponentActivity) {
         topBar = {
             TopAppBar(
                 title = { Text("DroidRestaurant") },
-                navigationIcon = {
-                    IconButton(onClick = { activity.onBackPressed() }) {
-                        Icon(Icons.Filled.ArrowBack, "Back")
-                    }
-                }
             )
         }
     ) { innerPadding ->
@@ -632,16 +634,46 @@ class CartActivity : ComponentActivity() {
         val context = this
         runOnUiThread {
             setContent {
-                Snackbar {
-                    Text("Commande passée avec succès")
+                Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Snackbar {
+                        Text("Commande passée avec succès")
+                    }
+
+                    val gifUrl = "https://c.tenor.com/xCxpdjzdSyMAAAAC/tenor.gif"
+                    ShowGifFromInternet(gifUrl)
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Text(
+                        text = "Vous allez être redirigé à la page d'accueil dans quelques secondes",
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
             }
         }
-        Handler(Looper.getMainLooper()).postDelayed({
-            val homeIntent = Intent(context, HomeActivity::class.java)
-            homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(homeIntent)
-        }, 500)
+            Handler(Looper.getMainLooper()).postDelayed({
+                val homeIntent = Intent(context, HomeActivity::class.java)
+                homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(homeIntent)
+            }, 3000)
+        }
+
+
+    @Composable
+    fun ShowGifFromInternet(gifUrl: String) {
+        GlideImage(
+            imageModel = gifUrl,
+            modifier = Modifier
+                .fillMaxWidth()
+                .size(400.dp),
+            contentScale = ContentScale.Crop,
+            requestOptions = {
+                RequestOptions()
+                    .error(R.drawable.plat)
+            }
+        )
     }
 
 
