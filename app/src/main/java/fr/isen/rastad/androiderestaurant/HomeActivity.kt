@@ -620,7 +620,7 @@ class CartActivity : ComponentActivity() {
                                 getSharedPreferences("PREFERENCES", MODE_PRIVATE)
                             sharedPreferences.edit().putInt("cart_quantity", 0).apply()
                             cartQuantity.value = 0
-                            showOrderPlacedSnackbarAndReturnHome()
+                            showOrderPlacedAndReturnHome()
                         }
                     },
                     onBack = { finish() },
@@ -630,20 +630,26 @@ class CartActivity : ComponentActivity() {
         }
     }
 
-    private fun ComponentActivity.showOrderPlacedSnackbarAndReturnHome() {
+    private fun ComponentActivity.showOrderPlacedAndReturnHome() {
         val context = this
         runOnUiThread {
             setContent {
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Snackbar {
-                        Text("Commande passée avec succès")
-                    }
+
 
                     val gifUrl = "https://c.tenor.com/xCxpdjzdSyMAAAAC/tenor.gif"
                     ShowGifFromInternet(gifUrl)
 
                     Spacer(modifier = Modifier.height(32.dp))
 
+                    Text(
+                        text = "Commande passée avec succès !",
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(25.dp))
                     Text(
                         text = "Vous allez être redirigé à la page d'accueil dans quelques secondes",
                         style = MaterialTheme.typography.headlineMedium,
